@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Cycling Computer</title>
+<style>
+body{margin:0;background:#111;color:#fff;font-family:system-ui,sans-serif;text-align:center}
+main{max-width:520px;margin:auto;padding:24px}
+#speed{font-size:90px;font-weight:800;line-height:1}
+.unit{color:#aaa}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:25px 0}
+.card{background:#222;border-radius:14px;padding:14px 4px}
+.label{font-size:12px;color:#aaa}.value{font-size:20px;font-weight:700;margin-top:5px}
+button{font-size:18px;padding:13px 20px;margin:5px;border-radius:12px;border:1px solid #555;background:#222;color:#fff}
+#start{background:#fff;color:#111}
+#status{color:#aaa;margin-top:15px}
+</style>
+</head>
+<body>
+<main>
+<h2>🚴 My Cycling Computer</h2>
+<div id="speed">0.0</div><div class="unit">km/h</div>
+<div class="grid">
+<div class="card"><div class="label">距離</div><div id="distance" class="value">0.00 km</div></div>
+<div class="card"><div class="label">時間</div><div id="time" class="value">00:00:00</div></div>
+<div class="card"><div class="label">平均</div><div id="avg" class="value">0.0 km/h</div></div>
+</div>
+<button id="start">START</button><button id="pause">PAUSE</button><button id="reset">RESET</button>
+<div id="status">待機中</div>
+<script>
+let running=false,watch=null,last=null,distance=0,elapsed=0,start=0,timer=null;
+const $=id=>document.getElementById(id);
+function timeText(ms){let s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return [h,m,x].map(v=>String(v).padStart(2,'0')).join(':')}
+function render(speed=0){
+ let t=elapsed+(running?Date.now()-start:0),sec=t/1000;
+ $('speed').textContent=speed.toFixed(1);
+ $('distance').textContent=distance.toFixed(2)+' km';
+ $('time').textContent=timeText(t);
+ $('avg').textContent=(sec>0?(distance/(sec/3600)):0).toFixed(1)+' km/h';
+}
+$('start').onclick=()=>{
+ if(running)return;
+ running=true;start=Date.now();last=null;$('status').textContent='GPS取得中…';
+ if(navigator.geolocation){
+  watch=navigator.geolocation.watchPosition(p=>{
+   let now=p.coords;
+   let speed=now.speed!=null&&now.speed>=0?now.speed*3.6:0;
+   if(last){
+    const R=6371e3,rad=x=>x*Math.PI/180;
+    const a=Math.sin((now.latitude-last.latitude)*rad(1)/2)**2+
+      Math.cos(last.latitude*rad(1))*Math.cos(now.latitude*rad(1))*Math.sin((now.longitude-last.longitude)*rad(1)/2)**2;
+    distance+=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))/1000;
+   }
+   last=now;$('status').textContent='走行中・GPS OK';render(speed);
+  },e=>{$('status').textContent='位置情報を許可してください';render(0)},{enableHighAccuracy:true,maximumAge:1000});
+ }else $('status').textContent='このブラウザはGPS非対応';
+ timer=setInterval(()=>render(0),1000);
+};
+$('pause').onclick=()=>{
+ if(!running)return;
+ elapsed+=Date.now()-start;running=false;
+ if(watch!==null)navigator.geolocation.clearWatch(watch);watch=null;
+ if(timer)clearInterval(timer);timer=null;last=null;
+ $('status').textContent='一時停止';render(0);
+};
+$('reset').onclick=()=>{
+ if(watch!==null)navigator.geolocation.clearWatch(watch);
+ if(timer)clearInterval(timer);
+ running=false;watch=null;timer=null;last=null;distance=0;elapsed=0;
+ $('status').textContent='待機中';render(0);
+};
+render(0);
+</script>
+</main>
+</body>
+</html>
